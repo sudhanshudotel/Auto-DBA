@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "auto-dba": {
+      "command": "uvx",
+      "args": ["--directory", "${workspaceFolder}", "auto-dba"],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/postgres"
+      }
+    }
+  }
+}

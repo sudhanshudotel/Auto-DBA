@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-DBA Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background-color: #0f172a; /* tailwind slate-900 */
+            color: #f8fafc; /* tailwind slate-50 */
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-8">
+
+    <header class="w-full max-w-5xl flex justify-between items-center mb-8 glass-panel p-6">
+        <div>
+            <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">Auto-DBA</h1>
+            <p class="text-slate-400 mt-1">Autonomous Self-Healing PostgreSQL Performance Loop</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <span class="text-emerald-400 font-medium tracking-wide text-sm">System Active</span>
+        </div>
+    </header>
+
+    <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Metrics Cards -->
+        <div class="col-span-1 flex flex-col gap-6">
+            <div class="glass-panel p-6 flex flex-col items-center justify-center text-center">
+                <h3 class="text-slate-400 text-sm uppercase tracking-wider mb-2">Queries Optimized</h3>
+                <div class="text-5xl font-light text-blue-400" id="optimizationsCount">12</div>
+            </div>
+            
+            <div class="glass-panel p-6 flex flex-col items-center justify-center text-center">
+                <h3 class="text-slate-400 text-sm uppercase tracking-wider mb-2">Avg \u0394P (Improvement)</h3>
+                <div class="text-5xl font-light text-emerald-400" id="deltaP">84%</div>
+            </div>
+
+            <div class="glass-panel p-6">
+                <h3 class="text-slate-200 font-semibold mb-4 border-b border-slate-700 pb-2">Recent Actions</h3>
+                <ul class="text-sm space-y-3" id="logList">
+                    <li class="flex items-start space-x-3">
+                        <span class="text-emerald-400 font-bold">\u2713</span>
+                        <span class="text-slate-300">Created Index Concurrently on users(email)</span>
+                    </li>
+                    <li class="flex items-start space-x-3">
+                        <span class="text-emerald-400 font-bold">\u2713</span>
+                        <span class="text-slate-300">Analyzed table 'orders'</span>
+                    </li>
+                    <li class="flex items-start space-x-3">
+                        <span class="text-amber-400 font-bold">\u26A0</span>
+                        <span class="text-slate-300">High Z-score detected (z=4.2) on qid: 9a8b...</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="col-span-1 lg:col-span-2 glass-panel p-6 relative h-[500px]">
+            <div class="absolute top-6 left-6 right-6 flex justify-between items-center z-10">
+                <h2 class="text-xl font-semibold text-slate-100">Latency Improvement (Before/After)</h2>
+                <button onclick="simulateAnomaly()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors shadow-lg">Simulate Anomaly</button>
+            </div>
+            <div class="w-full h-full pt-12">
+                <canvas id="latencyChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const ctx = document.getElementById('latencyChart').getContext('2d');
+        
+        let labels = Array.from({length: 20}, (_, i) => \`T-\${20-i}\`);
+        let latencyData = Array.from({length: 20}, () => 45 + Math.random() * 10);
+        
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Query Latency (ms)',
+                    data: latencyData,
+                    borderColor: 'rgb(59, 130, 246)', // Tailwind blue-500
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: 'rgb(59, 130, 246)',
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8' } // text-slate-400
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#cbd5e1',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1
+                    }
+                },
+                animation: { duration: 400 }
+            }
+        });
+
+        function addDataPoint(val) {
+            chart.data.labels.shift();
+            chart.data.labels.push('Now');
+            chart.data.datasets[0].data.shift();
+            chart.data.datasets[0].data.push(val);
+            chart.update();
+        }
+
+        // Normal activity
+        let interval = setInterval(() => {
+            addDataPoint(45 + Math.random() * 10);
+        }, 2000);
+
+        function simulateAnomaly() {
+            clearInterval(interval);
+            
+            let anomalySteps = 0;
+            let anomalyInterval = setInterval(() => {
+                if (anomalySteps < 5) {
+                    // Spike latency (Z > 3 trigger)
+                    addDataPoint(150 + Math.random() * 50);
+                    if (anomalySteps === 0) logAction('\u26A0 High Z-score detected! Latency Spike.', 'text-amber-400');
+                } else if (anomalySteps === 5) {
+                    logAction('\u21BB Auto-DBA deploying CREATE INDEX CONCURRENTLY...', 'text-blue-400');
+                    addDataPoint(160 + Math.random() * 20);
+                } else if (anomalySteps === 6) {
+                    logAction('\u2713 Optimization applied. \u0394P verified.', 'text-emerald-400');
+                    document.getElementById('optimizationsCount').innerText = '13';
+                    document.getElementById('deltaP').innerText = '89%';
+                    addDataPoint(10 + Math.random() * 5); // Huge drop in latency
+                } else {
+                    addDataPoint(10 + Math.random() * 5); // Remained solved
+                }
+                
+                anomalySteps++;
+                if(anomalySteps > 15) {
+                    clearInterval(anomalyInterval);
+                    interval = setInterval(() => { addDataPoint(10 + Math.random() * 5); }, 2000);
+                }
+            }, 1000);
+        }
+
+        function logAction(text, colorClass) {
+            const list = document.getElementById('logList');
+            const li = document.createElement('li');
+            li.className = 'flex items-start space-x-3 opacity-0 transition-opacity duration-500';
+            li.innerHTML = \`<span class="\${colorClass} font-bold">\u2022</span><span class="text-slate-300">\${text}</span>\`;
+            list.prepend(li);
+            if (list.children.length > 5) list.removeChild(list.lastChild);
+            setTimeout(() => li.classList.remove('opacity-0'), 50);
+        }
+    </script>
+</body>
+</html>

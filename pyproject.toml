@@ -1,0 +1,27 @@
+[project]
+name = "auto-dba"
+version = "0.1.0"
+description = "Autonomous PostgreSQL Database Administrator built with MCP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.2.0",
+    "asyncpg>=0.30.0",
+    "pydantic>=2.10.0",
+    "numpy>=2.2.0",
+    "scipy>=1.15.0",
+    "python-dotenv>=1.0.0"
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.3.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+auto-dba = "auto_dba.main:app.run"

@@ -1,0 +1,11 @@
+{
+  "tools": {
+    "auto-dba": {
+      "command": "uvx",
+      "args": ["--directory", ".", "auto-dba"],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/postgres"
+      }
+    }
+  }
+}
