@@ -1,23 +1,37 @@
 [project]
 name = "auto-dba"
-version = "0.1.0"
+version = "1.0.0"
 description = "Autonomous PostgreSQL Database Administrator built with MCP"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.2.0",
     "asyncpg>=0.30.0",
     "pydantic>=2.10.0",
     "numpy>=2.2.0",
-    "scipy>=1.15.0",
+    "pglast>=6",
     "python-dotenv>=1.0.0"
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
     "ruff>=0.3.0"
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # long lines are fine — formatter handles wrapping where it matters
 
 [build-system]
 requires = ["hatchling"]

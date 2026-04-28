@@ -1,47 +1,50 @@
-# Auto-DBA ⚡ (Python Architecture)
+# Auto-DBA
 
-Auto-DBA is an autonomous, self-healing performance loop for PostgreSQL built as an **Model Context Protocol (MCP) Server**. It dynamically detects performance anomalies using a rolling $Z$-score logic (via `numpy`) and proposes optimization schemas via an LLM agent.
+Auto-DBA is a self-healing performance loop for PostgreSQL, packaged as a **Model Context Protocol (MCP) server**. The LLM client (Cursor / Claude Code) drives a 5-tool loop: detect anomalies → propose an index → simulate impact → apply DDL → verify the win.
 
-## 🛡️ Zero-Trust Safety Model
+## Zero-Trust Safety Model
 
-Auto-DBA enforces strict Guardrails logic out-of-the-box (`src/auto_dba/guardrail.py`):
-- **Simulation**: Generates dry run estimates for table size and index build time.
-- **SQL Sanitizer**: Blocks ALL actions by default except `CREATE INDEX CONCURRENTLY`, `ANALYZE`, and `REINDEX`. Destructive operations (`DROP`, `TRUNCATE`, `DELETE`) are hard-blocked.
-- **Risk Scoring**: Estimates DDL risk from 1 to 10 based on table sizes. Anything $> 5$ returns an `ACTION_REQUIRED` status, preventing fully autonomous execution without a Human-in-the-loop review.
+Out-of-the-box guardrails ([src/auto_dba/guardrail.py](src/auto_dba/guardrail.py)):
 
-## 🚀 One-Click Setup (Zero-Install Vibe-Coding)
+- **AST-based allowlist.** DDL is parsed with `pglast` (libpg_query). Only top-level `CREATE INDEX CONCURRENTLY`, `ANALYZE`, and `REINDEX INDEX/TABLE` are accepted. `;`-injection is rejected at parse time; substring tricks (a table named `drop_log`, comments containing `DROP`) cannot fool the parser.
+- **Pluggable risk model** ([src/auto_dba/risk.py](src/auto_dba/risk.py)). Composable bands for table size, write rate, and index count. Default policy reproduces the original size-only thresholds (`> 1 GB → 6`, `> 10 GB → 8`); anything `> 5` returns `ACTION_REQUIRED`.
+- **Re-validation on execute.** `execute_optimization_tool` re-parses the DDL through the same guardrail before applying — never trusts that the client previously validated.
 
-Auto-DBA relies on [uv](https://github.com/astral-sh/uv) and the FastMCP integration for a lightning-fast, zero-friction setup.
+## Setup
 
-### Prerequisites
-- Python 3.12+ 
-- `uv` installed (`pip install uv` or natively via curl/brew)
-- Docker (for local Postgres instances)
+Prereqs: Python 3.12+, [uv](https://github.com/astral-sh/uv), Docker (for local Postgres).
 
-### Installation
-1. Start the PostgreSQL metrics container:
-   \`\`\`bash
-   docker compose up -d
-   \`\`\`
+```bash
+# 1. Local Postgres with pg_stat_statements preloaded.
+docker compose up -d
 
-2. Run the MCP Server directly via `uvx`:
-   \`\`\`bash
-   # Cursor and Claude will automatically invoke this via their config bindings!
-   uvx --directory . auto-dba
-   \`\`\`
+# 2. Configure the DSN.
+cp .env.example .env
 
-### Testing the "Slow Query" Loop
-1. Install dependencies into the local venv (for testing scripts):
-   \`\`\`bash
-   uv sync
-   \`\`\`
-2. Run the test script to populate 100k rows and fire a slow query.
-   \`\`\`bash
-   uv run test_slow_query.py
-   \`\`\`
+# 3. Run the MCP server (Cursor/Claude invoke this via .cursor/mcp.json / .claudecode/config.json).
+uvx --directory . auto-dba
+```
 
-## Tools Exposed
-- `check_database_health_tool`: Polls `pg_stat_statements`, evaluates recent Δt against μ ± 3σ using `numpy`, returning metrics.
-- `get_optimization_plan_tool`: Analyzes query EXPLAIN JSON against an LLM context system for fast Seq-Scan detection.
-- `simulate_impact_tool`: Dry runs the proposed index layout over `pg_total_relation_size`.
-- `execute_optimization_tool`: Executes the validated query safely using `CONCURRENTLY`.
+Auto-DBA creates an `auto_dba` meta-schema on first run with two tables (`query_history`, `optimizations`) for persistent baselines and verification results. **Restarting the server no longer wipes Z-score baselines**.
+
+### Exercising the loop
+
+```bash
+uv sync
+uv run scripts/seed_slow_query.py   # populates 100k rows + a slow user_id query
+```
+
+Then drive the tools through your MCP client:
+
+1. `check_database_health_tool` — polls `pg_stat_statements`, flags Z-score anomalies (`z > 3` over a rolling 100-sample window).
+2. `get_optimization_plan_tool(query_text)` — runs `EXPLAIN (ANALYZE, BUFFERS, SETTINGS, FORMAT JSON)`. Returns the raw plan; the LLM proposes a `CREATE INDEX CONCURRENTLY` based on the docstring guidance.
+3. `simulate_impact_tool(ddl_statement)` — parses, allowlists, and risk-scores the DDL.
+4. `execute_optimization_tool(ddl_statement, queryid, expected_improvement_percentage)` — snapshots `baseline_p95_ms`, applies the DDL, returns an `optimization_id`.
+5. `verify_optimization_tool(optimization_id)` — after the workload has driven new samples through, computes actual p95 improvement and persists it.
+
+### Tests
+
+```bash
+uv run pytest                        # full suite (DB tests skip without DATABASE_URL)
+uv run pytest tests/test_guardrail.py tests/test_risk.py   # pure unit tests, no DB
+```

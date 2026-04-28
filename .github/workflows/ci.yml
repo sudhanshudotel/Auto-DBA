@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        # Mirror postgresql.conf — pg_stat_statements has to be loaded via
+        # shared_preload_libraries before the server starts.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        # Service container 'command' is supported via top-level args env.
+        # Postgres image's entrypoint forwards extra args to postgres(1).
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure pg_stat_statements
+        run: |
+          docker exec ${{ job.services.postgres.id }} \
+            bash -c "echo \"shared_preload_libraries='pg_stat_statements'\" >> /var/lib/postgresql/data/postgresql.conf"
+          docker restart ${{ job.services.postgres.id }}
+          # Wait for restart.
+          for _ in {1..30}; do
+            if docker exec ${{ job.services.postgres.id }} pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec ${{ job.services.postgres.id }} \
+            psql -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --all-groups
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test
+        run: uv run pytest -v
